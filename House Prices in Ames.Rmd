@@ -1,0 +1,872 @@
+---
+output:
+  html_document: default
+  word_document: default
+  pdf_document: default
+---
+House Prices in Ames, Iowa - Rafael Rodrigues Santana
+========================================================
+
+```{r echo=FALSE, message=FALSE, warning=FALSE, packages}
+library(data.table)
+library(tidyverse)
+library(GGally)
+library(gridExtra)
+library(reshape2)
+theme_set(theme_gray())
+library(corrplot)
+library(lubridate)
+library(zoo)
+```
+
+```{r echo=FALSE}
+hp_train <- fread('train_update.csv', stringsAsFactors = FALSE)
+```
+
+# About the data
+- The dataset contains 1460 rows and 60 columns.
+- A data wrangling process has already been carried out, dealing with missing values and relabeling the columns. The complete process can be accessed in the `data_wrangling` notebook.
+- There aren't duplicated rows in the dataset.
+
+# Introduction
+
+In this project, the main objective is to identify which variables influence in the increase or the decrease of the prices of the houses, exploring the relationship between the response variable and other variables in multiple ways.
+
+There are some features that I believe that most people take into account before buying a house or setting the price of a house like:
+
+- Size of the house.
+- Neighborhood.
+- Type of Neighborhood.
+- Number of rooms.
+- Number of bathrooms.
+- Overall Quality of the house.
+- Distance from the centerof the city.
+- Size of the living room.
+- Month of the year.
+- Size of the garage.
+- Age of the house.
+
+# Univariate Plots Section  
+
+## Sale Price - Distribution
+
+```{r message=FALSE, fig.align='center', fig.height=4, fig.width=5}
+hp_train %>%
+  #In this plot, I will create a histogram to show the distribution
+  #and three vertical lines to mark the 2.5 percentile, the median
+  #and the 97.5 percentile
+  ggplot(aes(x = SalePrice)) + geom_histogram(fill = '#6897bb') + 
+  geom_vline(xintercept = quantile(hp_train$SalePrice, 0.025), 
+             color = 'red', linetype = 'dashed') +
+  geom_vline(xintercept = quantile(hp_train$SalePrice, 0.975), 
+             color = 'red', linetype = 'dashed') +
+  geom_vline(xintercept = quantile(hp_train$SalePrice, 0.50), 
+             color = 'red', linetype = 'solid') +
+  ggtitle('Sale Price - Distribution') + xlab('price') +
+  ylab('count')
+```
+
+#### Observations:
+
+- The distribution of the Sale Prices is skewed to the right.
+- 95% of the houses were sold for, aproximately, between 80.000 and 400.000.
+- The median price is, aproximately, 180.000.  
+  
+## Lot Area - Distribution
+
+
+```{r message=FALSE, fig.height=4, fig.width=5, fig.align='center'}
+hp_train %>%
+  # I will repeat the same steps for this plot. However,
+  # I will subset the data to not display outliers and
+  # thiswill affect a little bit the marks of the percentiles.
+  subset(LotArea > quantile(LotArea, 0.01) &
+         LotArea < quantile(LotArea, 0.99)) %>%
+  ggplot(aes(x = LotArea)) + geom_histogram(fill = '#6897bb') + 
+  geom_vline(xintercept = quantile(hp_train$LotArea, 0.025), 
+             color = 'red', linetype = 'dashed') +
+  geom_vline(xintercept = quantile(hp_train$LotArea, 0.975), 
+             color = 'red', linetype = 'dashed') +
+  geom_vline(xintercept = quantile(hp_train$LotArea, 0.50), 
+             color = 'red', linetype = 'solid')  + xlab('area') +
+  ylab('number of houses') + ggtitle('Lot Area - Distribution')
+```
+    
+    
+#### Observations:
+
+- There are a lot of outliers in this variables, so I had to work with just 98% of the data, getting rid of the 1% bounds. Because of that, is difficult to estimate precisely where 95% of the data is.
+- The median size of a house is, aproximately, 10000 square feets. 
+- **Important:** One thing that could be interesting for the next section is to check if the zoning type of the house influence in the price and in the size of the house.
+
+
+## Total number of houses sold by month
+
+```{r echo=FALSE}
+
+```
+
+
+```{r Univariate_Plots, fig.align='center', fig.height=4, fig.width=6}
+# Those labels will be used in the x-axis
+month_labels <- c('Jan','Feb','Mar','April','May','June',
+                 'July','Aug','Sep','Oct','Nov','Dec')
+
+hp_train %>%
+  #getting the counts by month before creating the plot
+  group_by(MoSold) %>%
+  summarise(number_of_houses = n()) %>% 
+  ggplot(aes(MoSold, number_of_houses)) + 
+  geom_line(linetype = 'longdash') + geom_point() +
+  ylim(0, 400) + xlab('month') + ylab('number of sales') +
+  ggtitle('Total number of houses sold by month') +
+  scale_x_continuous(breaks = 1:12,
+                     labels = month_labels)
+```
+
+  
+It seems that, in average, the number sales in the city of Ames are more common between April and August.
+
+But, there are somethings that I want to check later like:
+
+- The distribution of the months is simmetric? or is there data missing for some of the months?
+- The amount of money spent is also high in those months?
+
+## Number of high quality rooms by House
+  
+
+```{r message=FALSE, fig.height=4, fig.align='center', fig.width=6}
+hp_train %>%
+  # Here instead of using geom_bar(stat = 'count'), I have decided to use
+  # stat_count directly
+  ggplot(aes(factor(TotRmsAbvGrd))) + stat_count(fill = '#6897bb') +
+  xlab('number of rooms') + ylab('number of houses') +
+  ggtitle('Number of high quality rooms by House')
+```
+
+  
+#### Observations:
+
+- Most of the houses have between five and eight high quality rooms.
+- The minimum number of rooms in a house in this dataset is 2.
+- The maximum number of rooms in this dataset is 14.
+
+## Garage's capacity (cars) - Distribution
+  
+
+```{r message=FALSE, fig.height=4, fig.align='center', fig.width=6}
+hp_train %>%
+  ggplot(aes(GarageCars)) + stat_count(fill = '#6897bb') +
+  xlab('capacity (number of cars)') + ylab('number of houses') +
+  ggtitle("Garage's capacity (cars) - Distribution")
+```
+
+  
+- Most of the houses, have capacity for two cars.
+- Aproximately 50 houses doesn't have a garage.
+
+## Sales by Neighborhood
+  
+
+```{r message=FALSE, fig.height=4, fig.align='center'}
+# Horizontal bar plots demand a coord_flip()
+ggplot(aes(Neighborhood), data = hp_train) + stat_count(fill = '#6897bb') +
+  coord_flip() + xlab('neighborhood') + ylab('number of sales') +
+  ggtitle('Sales by Neighborhood')
+```
+
+  
+#### Observations:
+
+- The neighborhoods with the higher demand for houses are North Ames, followed by College Crick, Old Town, Edwards and Somerset.
+- Some of the neighborhoods almost doesn't have sales, for example, Bluestem, North Park Villa and Veenker.
+
+
+#### Questions to be answered in the next section:
+
+- Locations where there were more demand for houses are, in average, more expensive?
+- Is there a predominant zoning type in the neighborhoods?
+
+# Univariate Analysis
+
+In this section, we could get an overview of the sales across time and space. Besides that, we have also investigate the distribution in our dataset of the house prices, area, garage capacity and of the number of rooms.
+
+In the next section, the focus of the analysis will be to understand the relationship between the prices and the other variables, taking as a first step, the doubts that have already emerged during the univariate analysis like:
+
+- The data available is simmetric for all the months?
+- Amount of Sales (US$) over time?
+- Median Price of the houses by neighborhood?
+- Zoning Type by Neighborhood?
+
+# Bivariate Plots Section
+
+## Sales by Month and Year 
+
+
+```{r message=FALSE, fig.height=4,fig.width=6, fig.align='center' }
+hp_train %>%
+  #getting the volume of sales by month and year
+  group_by(MoSold, YrSold) %>%
+  summarize(number_of_sales = n()) %>%
+  ggplot(aes(MoSold, number_of_sales, fill = factor(YrSold))) +
+  geom_bar(stat = 'identity', position = 'stack') +
+  scale_fill_brewer(type = 'qual', palette = 'Set1') +
+  xlab('month') + ggtitle('Sales by Month and Year') +
+  ylab('year') + theme(legend.title = element_blank()) +
+  scale_x_continuous(breaks = 1:12, labels = month_labels)
+```
+
+  
+#### Observations:
+
+- The plot show that in the last year, 2010, there are no data for the months of August, September, October, November and December.
+- The data of the month of July seems to be incomplete, since this is the month with the highest number of sales.
+
+\newpage
+
+## Sales Revenue by Month without 2010
+
+```{r message=FALSE, fig.height=4,fig.width=6, fig.align='center'}
+
+# In this chunk I'l create to plots. The first one will show the total
+# sales by month. On the other hand, the second one will show summary s-
+# statistics by month. Using those two plots, will be possible to see if the
+# increase in the sales between april and july was because of the volume of sales
+# or because of a change on price.
+plot1 <- hp_train %>%
+  # Filtering to get only sales before 2010.
+  filter(YrSold < 2010) %>%
+  group_by(MoSold) %>%
+  summarize(total_sales = sum(SalePrice)) %>%
+  ggplot(aes(MoSold, total_sales)) + geom_line(linetype = 'longdash') +
+  geom_point() + ylim(0, 60000000) + ylab('total revenue') +
+  #Adjusting the ymax to get a better view of the plot
+  xlab('month') + scale_x_continuous(breaks = 1:12, labels = month_labels) +
+  ggtitle('Sales Revenue by Month without 2010.')
+
+
+plot2 <- hp_train %>%
+  ggplot(aes(factor(MoSold), SalePrice)) + 
+  geom_boxplot(fill = '#6897bb', outlier.colour = 'brown',
+               outlier.alpha = 0.3, outlier.size = 0.25) +
+  xlab('month') + ylab('sales revenue') +
+  scale_x_discrete(breaks = c('1','2','3','4','5','6','7','8','9','10','11','12'),
+                   labels = month_labels)
+
+
+# I will display both plots using grid.arrange.
+grid.arrange(plot1, plot2)
+  
+```
+
+#### Observations:
+
+- This chart shown that the sales were higher between April and September because of the volume of sales is higher in those months.
+- The median price by month is between 180.000,00 and 200.000,00
+- The month with the lowest revenue is February.
+- There are a lot outliers, especially, in July.
+
+\newpage
+
+## Prices by Neighborhood
+
+
+```{r message=FALSE, fig.height=6,fig.width=7, fig.align='center'}
+hp_train %>%
+  ggplot(aes(Neighborhood, SalePrice)) + 
+  geom_boxplot(outlier.size = 0.25, outlier.colour = 'brown',
+               fill = '#6897bb', outlier.alpha = 0.3) +
+  coord_flip() + xlab('neighborhood') + ylab('price') +
+  ggtitle('Prices by Neighborhood')
+```
+
+#### Observations:
+
+- The neighborhoods with the highest median prices are Northridge Heights, followed by Northridge and Stone Brook.
+- The neighborhoods with the lowest median prices are Meadow and Iowa DOT and Rail Road, Briardale.
+- The neighborhoods with the highest range are Northridge Heights and Stone Brook.
+- The neighborhoods with the lowest range are Briardale and Bluestem.
+- One interesting finding is that, even though Old Town has a high number of sales, the median price is relatively low. Maybe, when we look at the neighborhood by zoning type, we can understand why.
+
+\newpage
+
+## Number of Sales by Neighborhood and Zoning Type
+
+
+```{r message=FALSE, fig.height=5,fig.width=7, fig.align='center'}
+hp_train %>%
+  #grouping by zoning type and neighborhood to get the conditional
+  # volumee of sales
+  group_by(Neighborhood, MSZoning) %>%
+  summarize(number_of_sales = n()) %>%
+  ggplot(aes(Neighborhood, number_of_sales, fill = MSZoning)) +
+  #here I use 'position = stack' to group to get a stacked bar plot
+  geom_bar(stat = 'identity', position = 'stack') +
+  coord_flip() + scale_fill_brewer(type = 'qual', palette = 'Set1') +
+  xlab('Neighborhood') + ylab('number of sales') +
+  ggtitle('Number of Sales by Neighborhood and Zoning Type') +
+  # I will do the following more times in this project, but, basically,
+  # the following function is used to remove the title from the legend.
+  theme(legend.title = element_blank())
+```
+
+#### Observations:
+
+Most of the neighborhoods have the zoning type 'Residential Low Density' as their predominant type. Some of the exceptions are Old Town, Briardale, Iowa DOt and Rail Road, Meadow Village and Somerset. This is interesting because, excluding Somerset (which also have a different zoning type) all of them have a relatively low median sale price.  
+
+Another interesting thing is that the commercial properties are concentrated in Iowa Dot and Rail Road; and the Floating Village Residential's properties are concentrated in Somerset.
+
+One thing that may be interesting to check is the relationship between the zoning types and the size of the properties.
+
+\newpage
+
+## Lot Size versus Zoning Type
+
+\begin{center} \textbf{Lot Size versus Zoning Type} \end{center}
+
+```{r message=FALSE, fig.height=4,fig.width=6, fig.align='center'}
+# Creating labels to make increase the space for the plot (The old labels are very big)
+labels <- c('Commercial','Floating Village', 'High Dens.', 'Low Dens.','Medium Dens.')
+
+hp_train %>%
+  subset(LotArea > quantile(LotArea, 0.025) &
+         LotArea < quantile(LotArea, 0.975)) %>%
+  #I have subsetted the df in order to have improve the interpretability of the plot.
+  # The LotArea has too much outliers.
+  ggplot(aes(MSZoning, LotArea)) + 
+  geom_boxplot(outlier.size = 0.25, outlier.colour = 'brown',
+               fill = '#6897bb', outlier.alpha = 0.3) +
+  scale_x_discrete(labels = labels) + xlab('zoning type') + ylab('area') 
+  
+```
+
+#### Observations
+
+As expected, it seems that, in average, properties located in Medium Density are smaller than the others. On the other hand, the properties located in a Low Residential Density are, in average, bigger than the others. The properties of the commercial, floating village and High dentisy properties are have a median lot size of, aproximately, 8.500 square feets.
+
+The properties of the Residential Low Density have a lot of outliers and, at the same time, also have the highest range of area.
+
+## Features - Distribution
+
+
+```{r message=FALSE, fig.height=4,fig.width=6, fig.align='center'}
+#creating an variable that aggregates all the bathrooms that exist in a house
+hp_train$bathrooms <- (hp_train$FullBath + 
+                       hp_train$HalfBath + 
+                       hp_train$BsmtFullBath +
+                       hp_train$BsmtHalfBath)
+
+#selectiong, to transform and plot
+house_features <- hp_train %>%
+  select(bathrooms, GarageCars, BedroomAbvGr, KitchenAbvGr)
+
+
+house_features %>%
+  #I will use gather to transform the columns and rows and plot them all in
+  # a single plot
+  gather(key = 'feature', value = 'quantity') %>%
+  #grouping them by feature and quantity of this feature
+  group_by(feature, quantity) %>%
+  summarise(count = n()) %>%
+  ggplot(aes(feature, count, fill = factor(quantity))) + 
+  geom_bar(stat = 'identity', position = 'fill', width = 0.65) +
+  scale_fill_brewer(type = 'qual', palette = 'Set1', direction = 2) +
+  xlab('feature') + ylab('percent') + ggtitle('Features - Distribution') +
+  theme(legend.title = element_blank()) +
+  scale_x_discrete(labels = c('bathrooms','bedrooms','garage capacity (cars)', 'kitchen'))
+```
+
+#### Observation
+
+Features Mode:
+
+- Bathrooms: three bathrooms  
+- Bedrooms: three bedrooms  
+- Garage Capacity: 2 cars  
+- Kitchen: 1 kitchen  
+
+Let's see if there is a linear relationship between those variables and the price of the house. I'll ignore the Kitchen variable, since the majority of the houses only have one kitchen.
+
+## Features versus Price
+
+```{r message=FALSE, fig.height=5,fig.width=8, fig.align='center'}
+# First I will select the desired features
+house_features <- hp_train %>%
+  select(bathrooms, GarageCars, BedroomAbvGr, TotRmsAbvGrd, SalePrice)
+
+names(house_features) <- c('Bathrooms','Garage Capacity (Cars)',
+                           'Bedrooms','Total rooms','Price')
+#I have changed their names to make the plot look nicers
+
+#Lastly, I will use gather, to make all of the columns rows, except the price
+#That way, I will be able to use facet-wrap to get an overview of the
+# relationshipt of those features with price in a single plot.
+house_features %>%
+  gather(key = 'features', value =  'quantity', -Price) %>%
+  ggplot(aes(factor(quantity), Price, fill = features)) + geom_boxplot() +
+  facet_wrap(~features) + xlab('quantity') + ylab('price') +
+  ggtitle('Availability of rooms versus price faceted by feature')
+  
+```
+
+```{r echo=FALSE}
+
+# Printing the correlation of all the variables in the plot above.
+text <- paste("The correlations for the bathrooms, bedrooms,", 
+              "garage capacity and total rooms are, respectively:", '',
+      round(cor(hp_train$bathrooms, hp_train$SalePrice), 2),
+      round(cor(hp_train$BedroomAbvGr, hp_train$SalePrice), 2),
+      round(cor(hp_train$GarageCars, hp_train$SalePrice), 2),
+      round(cor(hp_train$TotRmsAbvGrd, hp_train$SalePrice), 2), sep = "\n")
+cat(text)
+```
+
+#### Observations:
+
+It seems that there is a linear relationship between price and the availabity of space in the garage, the number of bathrooms and the total number of rooms. On the other hand, it seems that there isn't a linear relationship between the number of bedrooms and the price of the house.
+
+This shows that the constructed area of the house may be a very important feature to understand the price of the house. Unfortunately, this dataset doesn't have this variable.
+
+I will try to estimate this by adding the total area of the basements with the are of the first and second floor.
+
+
+## Constructed Area versus Price
+
+
+
+```{r message=FALSE,fig.height=4,fig.width=6,fig.align='center',warning=FALSE}
+#Combining the area of the basement, first floor and second floor to get an esti-
+#mation of the size of the house
+hp_train$house_size <- hp_train$TotalBsmtSF + hp_train$`1stFlrSF` + hp_train$`2ndFlrSF`
+
+#removing outlies
+corre <- hp_train %>% 
+  subset(house_size < quantile(house_size, 0.995))
+#calculating correlation without the outliers
+corre <- round(cor(corre$house_size, corre$SalePrice), 2)
+
+
+#Getting the correlation with outliers
+text <- paste('Correlation = ', round(cor(hp_train$house_size, 
+                                         hp_train$SalePrice), 2)) 
+
+text2 <- paste('Correlation without the outliers =', corre)
+
+hp_train %>%
+  subset(house_size > quantile(house_size, 0.005) &
+         house_size < quantile(house_size, 0.995)) %>%
+  ggplot(aes(house_size, SalePrice)) +
+  geom_jitter(shape = 20, size = 1, alpha = 0.75) +
+  geom_smooth(method = 'lm', se = FALSE) +
+  xlab('constructed area') + ylab('price') +
+  #making the text on the plot
+  annotate("text", x = c(1500, 2100), y = c(600000, 550000), 
+           label = c(text, text2)) +
+  ggtitle('Constructed Area versus Price')
+```
+
+#### Observations:
+
+- It seems that the value estimated is very correlated with the price of the houses. It gets even more correlated when the outliers in the variable that was created are removed from the dataset.
+
+
+
+```{r message=FALSE,fig.height=6,fig.width=7,fig.align='center',warning=FALSE}
+#selecting features
+house_size <- hp_train %>%
+  select(GarageCars, TotRmsAbvGrd, BedroomAbvGr, bathrooms, house_size)
+
+#creating the names to be the labels in the plot
+names(house_size) <- c('Garage (capacity)','Total rooms','bedrooms','bathrooms', 'house_size')
+
+house_size %>%
+  #using gather to transform all of the features in rows, except the house size
+  gather(key = 'features', value = 'features_size', -house_size) %>%
+  ggplot(aes(factor(features_size), house_size, fill = features)) + geom_boxplot() +
+  #faceting by features
+  facet_wrap(~features) +
+  xlab('features') + ylab('house size') +
+  ggtitle('Features versus house size')
+
+  
+```
+
+
+```{r message=FALSE,fig.height=3,fig.width=5,fig.align='center',warning=FALSE, echo=FALSE}
+# Calculating the correlation of the features of the plot above
+text <- paste("The correlations for the bathrooms, bedrooms,", 
+              "garage capacity and total rooms are, respectively:", '',
+      round(cor(house_size$bathrooms, house_size$house_size), 2),
+      round(cor(house_size$bedrooms, house_size$house_size), 2),
+      round(cor(house_size$`Garage (capacity)`, house_size$house_size), 2),
+      round(cor(house_size$`Total rooms`, house_size$house_size), 2), sep = "\n")
+cat(text)
+```
+
+#### Observations:
+
+There is a positive linear relationship between the variable that I have created to represent the size of the house and the other variables. However, the correlation between them is not so high.
+
+
+## Sale Price versus Age of the house
+
+
+```{r message=FALSE,fig.height=4,fig.width=5,fig.align='center',warning=FALSE}
+#Calculating the age of each house
+hp_train$age <- 2018 - hp_train$YearBuilt
+
+text = paste('The correlation is: ', round(cor(hp_train$age, 
+                                         hp_train$SalePrice), 2))
+
+hp_train %>%
+  ggplot(aes(age, SalePrice)) + geom_jitter(shape = 20, size = 1, alpha = 0.75) +
+  geom_smooth(method = 'lm', se = FALSE) +
+  xlab('age') + ylab('price') + ggtitle('Age of the house versus Sale Price') +
+  annotate('text', x = 35, y = 700000, label = text)
+
+```
+
+#### Observations:
+
+The correlation between the two variables is medium, but it doesn't seem to have a normal relationship between the variables. Besides that, there are a lot of outliers in this plot.
+
+
+## Sale Price versus Overall Quality
+
+
+```{r message=FALSE,fig.height=4,fig.width=6,fig.align='center',warning=FALSE}
+#text to be plotted togetter 
+text = paste('The correlation is: ', round(cor(hp_train$OverallQual, 
+                                         hp_train$SalePrice), 2))
+
+hp_train %>%
+  ggplot(aes(factor(OverallQual), SalePrice)) + geom_boxplot(shape = 20) +
+  annotate('text', x = 3, y = 600000, label = text) + 
+  xlab('overall quality') + ylab('price') + 
+  ggtitle('Price versus Overall Quality')
+```
+
+#### Observations:
+
+There is a positive linear relationship between the variables and the correlation is high.
+
+# Bivariate Analysis
+
+In this section, a lot of relationshipts were found between the price of the house and the other variables. The most significant relationships happened between the response variable and the variables `ÒverallQual` and `house_size`. 
+
+It's important to remember that the variable `house_size` was created by merging the area in square feet of the first floor, second floor and basement. I have done that because I have realized that most of the variables related to area have a relationship with the price.
+
+Some interesting relationships were also observed between the explanatory variables like between `MSZoning` and `Neighborhood` or between the volume of sales and the month.
+
+In the next section, I'm planning to use the relationship between the `house_size` and `SalePrice` to understand how some categorical variables are related to them. Some examples are:
+
+- Neighborhood: neighborhood of the house.
+- Overall Quality: quality of the house.
+- MSZoning: zoning type.
+- TotRmsAbvGd: total rooms above grade
+- GarageCars: capacity of the garage in cars.
+- age: age of the house.
+
+\newpage
+
+# Multivariate Plots Section
+
+## Price versus Estimated House Size and Overall Quality
+
+```{r message=FALSE,fig.height=4,fig.width=6,fig.align='center',warning=FALSE}
+hp_train %>%
+  #Removing outliers
+  subset(house_size > quantile(house_size, 0.005) &
+         house_size < quantile(house_size, 0.995)) %>%
+  ggplot(aes(house_size, SalePrice, color = factor(OverallQual))) + 
+  #Using jitter and alpha 0.7 to avoid overplotting
+  geom_jitter(alpha = 0.7) +
+  scale_color_brewer(type = 'div', palette = 7) +
+  xlab('house size (estimated)') + ylab('price') +
+  ggtitle('Price versus Estimated House Size and Overall Quality') + 
+  theme(legend.title = element_blank())
+```
+
+#### Observations:
+
+Here we can see that there is a positive linear relationship between the variables because the value of the overall quality is growing together with size of the house and the price of the house.
+
+The majority of the houses that have been sold by more than 300.000,00 had an evaluation of quality higher than 8 and were bigger than 3000 square feets. On the other had, small houses with a bad evaluation, are more likely to have been sold for less than 150.000,00.
+
+
+# Multivariate Plots Section
+
+## Sale price versus house size and zoning type
+
+```{r message=FALSE,fig.height=4,fig.width=6,fig.align='center',warning=FALSE}
+hp_train %>%
+  #Removing outliers
+  subset(house_size > quantile(house_size, 0.005) &
+         house_size < quantile(house_size, 0.995)) %>%
+  #color will be the MSZoning
+  ggplot(aes(house_size, SalePrice, color = factor(MSZoning))) +
+  #Using jitter and alpha to avoid overplotting
+  geom_jitter(alpha = 0.65) +
+  scale_color_brewer(type = 'div', palette = 7) +
+  xlab('house size') + ylab('price') +
+  ggtitle('Sale price versus house size and zoning type') +
+  theme(legend.title = element_blank())
+```
+
+#### Observations:
+
+As expected, based on the other plots related to the zoning type, properties of the Residential Low Density and of the Floating Village Residential are, in general, bigger and expensive than the properties located in the other types of zoning.
+
+## Sale price versus house size and garage capacity
+
+```{r message=FALSE,fig.height=3,fig.width=5,fig.align='center',warning=FALSE}
+hp_train %>%
+  # Removing outliers 
+  subset(house_size > quantile(house_size, 0.005) &
+         house_size < quantile(house_size, 0.995)) %>%
+  # The color will represent the capacity of the garage in cars
+  ggplot(aes(house_size, SalePrice, color = factor(GarageCars))) +
+  # Using jitter and alpha to avoid overplotting
+  geom_jitter(alpha = 0.65) +
+  scale_color_brewer(type = 'div', palette = 8) +
+  xlab('house size') + ylab('price') +
+  ggtitle('Sale price versus house size and garage capacity') +
+  theme(legend.title = element_blank())
+```
+
+#### Observations
+
+Here we can see that in, general, bigger houses have more space on the garage. What about the type of the garage, is there any pattern on this matter too?
+
+## Sale price versus house size and garage type
+
+```{r message=FALSE,fig.height=4,fig.width=6,fig.align='center',warning=FALSE}
+hp_train %>%
+  # Removing outiliers
+  subset(house_size > quantile(house_size, 0.005) &
+         house_size < quantile(house_size, 0.995)) %>%
+  # The colors will represent the type of the garage
+  ggplot(aes(house_size, SalePrice, color = factor(GarageType))) +
+  # Using jitter and alpha to avoid overplotting
+  geom_jitter(alpha = 0.65) +
+  # Here along with the pallet,I have also changed the labels to make the plot 
+  # look better
+  scale_color_brewer(type = 'div', palette = 7, 
+                     labels = c('Attached to home', 'Basement Garage',
+                                'Build-In','Car Port','Detached from home',
+                                'More than one type','No Garage')) +
+  xlab('house size') + ylab('price') +
+  ggtitle('Sale price versus house size and garage type') +
+  theme(legend.title = element_blank()) 
+```
+
+#### Observations:
+
+- The most common type of garage is `attached to home`, being present, especially, in houses that are bigger than 2000 square feets. On the other hand, houses that have less than 2000 square feets are more diverse in the types of garage and the most common types are: ``No Garage` and `Detached from home`.
+
+## Sale Price versus size of the house and age
+
+```{r message=FALSE,fig.height=4,fig.width=6,fig.align='center',warning=FALSE}
+hp_train %>%
+  # Removing outliers
+  subset(house_size > quantile(house_size, 0.005) &
+         house_size < quantile(house_size, 0.995) &
+         age < quantile(house_size, 0.98)) %>%
+  # Color will represent the age of the house
+  # Differently from before, now I will use a continuous 
+  # pallete because the variability of the age is higher
+  # than the other variables that we have used as color so far
+  ggplot(aes(house_size, SalePrice, color = age)) +
+  geom_jitter(alpha = 0.65) +
+  # Using jitter and alpha to avoid overplotting
+  xlab('house size') + ylab('price') +
+  ggtitle('Sale price versus house size and age') +
+  theme(legend.title = element_blank()) +
+  scale_color_gradientn(colours = colorRampPalette(c('white','cyan','blue','#192a3d'))(100))
+```
+
+#### Observations:
+
+This plot had shown that the age of the house is correlated with the size and, especially, the price of the house.
+
+However, the age is complicated to be a measure of quality of the house because many of them go through rebuildings during their existence.
+
+
+## Sale price versus house size and total rooms
+
+```{r message=FALSE,fig.height=4,fig.width=6,fig.align='center',warning=FALSE}
+hp_train %>%
+  #Subsetting
+  subset(house_size > quantile(house_size, 0.005) &
+         house_size < quantile(house_size, 0.995)) %>%
+  # Using the total rooms by house as the color of the plot
+  ggplot(aes(house_size, SalePrice, color = factor(TotRmsAbvGrd))) +
+  geom_jitter(alpha = 0.65) +
+  xlab('house size') + ylab('price') +
+  ggtitle('Sale price versus house size and total rooms') +
+  theme(legend.title = element_blank()) +
+  scale_color_brewer(type = 'div', palette = 7)
+```
+
+#### Observations:
+
+As we had already see in the earlier sections, the total number of rooms is very correlated with the price and the house size.
+
+## Sale price versus house size and bathrooms
+
+```{r message=FALSE,fig.height=3,fig.width=6,fig.align='center',warning=FALSE}
+hp_train %>%
+  # Removing the outliers
+  subset(house_size > quantile(house_size, 0.005) &
+         house_size < quantile(house_size, 0.995)) %>%
+  # Using the variable bathrooms to represent the color
+  ggplot(aes(house_size, SalePrice, color = factor(bathrooms))) +
+  geom_jitter(alpha = 0.65) +
+  xlab('house size') + ylab('price') +
+  ggtitle('Sale price versus house size and bathrooms') +
+  theme(legend.title = element_blank()) +
+  scale_color_brewer(type = 'div', palette = 8)
+```
+
+#### Observations
+
+As expected, smaller houses have a small number of bathrooms and are more expensive.
+
+
+```{r fig.height=10, fig.width=10}
+hp_train %>%
+  # Removing the outliers
+  subset(house_size > quantile(house_size, 0.005) &
+         house_size < quantile(house_size, 0.995)) %>%
+  # Using the quality of the house as the color
+  ggplot(aes(house_size, SalePrice, color = factor(OverallQual))) +
+  geom_jitter(alpha = 0.65) + # Using jitter and alpha to avoid overplotting
+  facet_wrap(~Neighborhood) + # Faceting by neighborhood
+  scale_color_brewer(type = 'div', palette = 8) +
+  xlab('house size') + ylab('price') +
+  ggtitle('Sale price versus house size and quality faceted by Neighborhood') +
+  theme(legend.title = element_blank())
+```
+
+#### Observations:
+
+Somethings called my attention. Firstly, is the fact that the slope and the incercept for the variables house size and price change a lot depending in the neighborhood. There are places like Sawyer that, even though there is a positive variation on the size of the house, the variation on the price is small. On the other hand, in neighborhoods like Stone Brook have almost a perfect correlation between size and price.
+
+Another thing that called my attention is the fact that the majority of the high quality properties (8+) are concentrated in few neighborhoods: Northridge Heights, Northridge, Somerset and Stone Brook. Those neighborhoods, as we saw earlier, have the highest median prices within our sample.
+
+On the other hand, neighborhoods like North Ames, Old Town, Edwards, Brookside and Iowa DOT and Road, concentrates the majority of the "Low" quality propertiers. One thing that could be useful, but we doesn't have the data, was to check if there is a relationship between the quality of the property and the income of the family.
+
+Lastly, some places almost doesn't have sales of houses, Bluestem, for example, only have two houses sold in almost five years. The question is nobody wants to buy houses in this neighborhood? Or there isn't people trying to sell their houses there? Or Both of them? With the data available, unfortunately, we are not able to answer this question.
+
+# Multivariate Analysis
+
+In general, this section was like a confirmation section of the findings of the past sections. We could see that there is a correlation between the features and if I would a make a model, I would have to use VIF to avoid collinearity in our model, since most of the variables explored are correlated with both the response variable and the size of the house.
+
+The most interesting finding was the difference in the slopes and intercepts depending on the quality of the house and the neiborghood that those house are located,
+
+The main exploratory variables in our model are Overall Quality, House Size and Neighborhood.
+
+------
+# Final Plots and Summary
+
+### Plot One
+
+
+```{r echo=FALSE, Plot_One}
+hp_train %>%
+  subset(house_size > quantile(house_size, 0.005) & # Removing outliers
+         house_size < quantile(house_size, 0.995)) %>%
+  ggplot(aes(house_size, SalePrice, # House Size as X and Price as Y
+             color = factor(TotRmsAbvGrd))) + # Total rooms to represent the color
+  geom_jitter(alpha = 0.65) + # Using jitter and alpha to avoid overplotting
+  xlab('house size (square feets)') + ylab('price (US$)') + # labels
+  ggtitle('Sale price versus house size and total rooms') + # title
+  theme(legend.title = element_blank()) + # Removing the title of the legend
+  scale_color_brewer(type = 'div', palette = 7) # Diverging pallete
+```
+
+### Description One
+
+This plot shown that exisits a strong relationship between the size of the house and the total number of rooms in the house. At the same time, there is also a relationship between the number of rooms and the price. This was expected, since bigger houses are, in general, more expensive.
+
+
+### Plot Two
+
+
+```{r echo=FALSE, Plot_Two, fig.align='center', fig.height=7, fig.width=7}
+hp_train %>%
+  #Removing outliers
+  subset(house_size > quantile(house_size, 0.005) & #subsetting
+         house_size < quantile(house_size, 0.995)) %>% 
+  ggplot(aes(house_size, SalePrice,
+             color = factor(OverallQual))) + # Color = Quality of the house
+  #Using jitter and alpha 0.7 to avoid overplotting
+  geom_jitter(alpha = 0.7) +
+  scale_color_brewer(type = 'div', palette = 7) + # Diverging pallete
+  xlab('house size in square feet (estimated)') + ylab('price') + # Labeling 
+  ggtitle('Price versus Estimated House Size and Overall Quality') + 
+  theme(legend.title = element_blank())
+```
+
+### Description Two
+
+This plot was interesting because it shows that the quality of the house is one of the most important features. Two houses could have the same size, but having different prices because of the quality of the house. At the same time, in general, a house need to be bigger enough to receive the best evaluation from the person who have evaluated them.
+
+### Plot Three
+
+
+```{r fig.height=10, fig.width=10}
+hp_train %>%
+  # Removing the outliers
+  subset(house_size > quantile(house_size, 0.005) &
+         house_size < quantile(house_size, 0.995)) %>%
+  # Using the quality of the house as the color
+  ggplot(aes(house_size, SalePrice, color = factor(OverallQual))) +
+  geom_jitter(alpha = 0.65) + # Using jitter and alpha to avoid overplotting
+  facet_wrap(~Neighborhood) + # Faceting by neighborhood
+  scale_color_brewer(type = 'div', palette = 8) + # Diverging palleted
+  xlab('house size') + ylab('price') + # Labeling
+  ggtitle('Sale price versus house size and quality faceted by Neighborhood') +
+  theme(legend.title = element_blank()) # Removing the legend
+```
+
+### Description Three
+
+In my opinion, this was the most important plot in the analysis because it shows the data in a disagregatted way and we can detect different patters that we would be unable to see in a single scatter plot.
+
+The combination of color and faceting showed that the slope and the intercept of the scatterplot depends on the neighborhood and in the quality of the house. In some cases, is almost a perfect linear relationship (Stone Brook), in others like in the neighborhood of Sawyer the correlation is very weak.
+
+Besides that, we could also see in which neighborhoods have had a higher and a lower number of sales between 2006 and 2010.
+
+------
+
+# Reflection
+
+## Insights:
+
+Based on the exploratory analysis, that I've done the variables with the higher correlation with the price are:
+
+- Quality of the house  
+- Garage Capacity (cars)  
+- House Size  
+- Age of the house  
+- Total rooms  
+- Neighborhood  
+- Number of bathrooms
+
+If I had to create a model to predict the price, I would have to use VIF to check for collinearity and some variables may not be useful for the model. But, the result with only those variables will be relatively good. 
+
+There are other variables that are good too, but I have not put them in this project because it would become bigger. This dataset has a lot of variables.
+
+Creating the storetelling was the most difficult part, especially, the selection of plots to keep in the project and thre creation of the narrative.
+
+Besides that, the project could be better if I have data from the income of the families, geospatial data of Ames because this would increase the kinds of plots to explore.
+ 
+# Resources used:
+- [GGplot2 Cheatsheet](https://www.rstudio.com/wp-content/uploads/2015/03/ggplot2-cheatsheet.pdf)
+- Data.table - Documentation (inside R)
+- [Sequential, diverging and qualitative colour scales](https://ggplot2.tidyverse.org/reference/scale_brewer.html)
+- [Chunk Options](https://yihui.name/knitr/options/)
+- [Annotation Layer](https://ggplot2.tidyverse.org/reference/annotate.html)
+- [R Graph Gallery](https://www.r-graph-gallery.com/)
+

@@ -1,0 +1,223 @@
+---
+title: "Data Wrangling"
+output: html_notebook
+---
+
+```{r echo=FALSE, message=FALSE, warning=FALSE, packages}
+library(data.table)
+library(tidyverse)
+library(GGally)
+library(gridExtra)
+library(reshape2)
+theme_set(theme_classic())
+library(corrplot)
+library(lubridate)
+library(zoo)
+```
+
+```{r echo=FALSE, Load_the_Data}
+# Load the Data
+hp_train <- fread('train.csv', stringsAsFactors = FALSE)
+```
+  
+## About the data
+
+- The dataset contains 1460 rows and 81 columns.
+- A data wrangling process has already been carried out, dealing with missing values and relabeling the columns. The complete process can be accessed in the notebook.
+- There aren't duplicated rows in the dataset.
+
+## Data Wrangling
+
+### Relabeling the columns
+
+```{r loading-data-descriptions}
+#this data has the old and new labels
+data_descriptions <- fread('data_descriptions.csv')
+```
+
+Now, I'll split this dataframe in two dataframes. The `x_df` will contain the old labels and the `y_df` will contain the new labels of each categorical column.  
+
+
+```{r echo=FALSE}
+#Here I'll use extract the columns using the sequence function because
+#the columns  with the labels are ordered
+x_df <- data_descriptions[, c(seq(1, 87, 2))]
+y_df <- data_descriptions[, c(seq(2, 88, 2))]
+#After that, I have renamed the columns of the x_df.
+names(x_df) <- names(y_df)
+
+#Here I used this function to check if all the columns of the y_df are inside the main dataframe.
+names(y_df) %in% names(hp_train)
+``` 
+  
+
+All the columns in the `y_df` are also present in the `hp_train` df. 
+
+```{r echo=FALSE}
+#before I split the main dataset, I'll convert this column to character
+hp_train$MSSubClass <- as.character(hp_train$MSSubClass)
+```
+
+
+```{r warning=FALSE, message=FALSE, error=FALSE}
+relabel <- function(data) {
+  library(plyr)
+#In order to relabel, I'll use a for loop.
+for (i in names(x_df)) {
+#The first step of the for loop is to get rid of the NA's in the 
+#x_df and y_df datasets
+#This was neccessary because each column has a different
+#number of labels
+  x <- x_df[[i]]
+  x <- subset(x, !is.na(x))
+
+  y <- y_df[[i]]
+  y <- subset(y, !is.na(y))
+
+#After that, we have to check if the length of the x and y are equal.
+#If they're equal, then we can use the map values function.
+  if (length(x) == length(y)) {
+    data[[i]] <- mapvalues(data[[i]], x, y)
+  } else {
+#In some cases, the length of x and y will be different because the
+# 'NA' value has a meaning. In this case, we will reshape the value
+# X, and use the function again.
+    x <- head(x_df[[i]], length(y))
+    data[[i]] <- mapvalues(data[[i]], x, y)
+  }
+}
+  detach('package:plyr', unload=TRUE)
+  # unloading the plyr package to not harm the dplyr package functions
+  # group_by and summarize
+  return(data)
+}
+
+hp_train <- relabel(hp_train)
+
+head(hp_train, 3)
+```
+
+### Dropping categorical columns
+
+There are some categorical variables that one of the categories represents more than 85% of our sample. So, I'll drop them to focus on the variables where the variability is higher.
+
+The columns that will be dropped are:
+  
+```{r}
+#Getting an overview of the character variables
+proportions <- sapply(hp_train, function(x) (table(x) / sum(table(x)))*100)
+
+#I created this for loop to print every categorical variable where one of the factors
+#represent more than 85% of all the factors
+#First a set a for loop to iterate over the numbers
+for (i in seq(1, length(proportions), 1)) {
+  if (any(proportions[[i]] > 85)) { #conditional statement
+    print(names(proportions[i])) #names of the columns
+  }
+}
+
+#I will drop this columns because the variability inside the column is very low (one factor represents more than 90% of all homes inside our dataframe)
+``` 
+
+
+```{r echo=FALSE}
+#In those cols, the variation is very small, hence, I'll drop them of our dataset.
+cols_to_drop <- c("Street","LandContour","Utilities","LandSlope",
+                  "Condition1","Condition2","RoofMatl","ExterCond",
+                  "BsmtCond","BsmtFinType1","Heating","CentralAir",
+                  "Electrical","KitchenQual","Functional","GarageQual",
+                  "GarageCond","PavedDrive","PoolQC","MiscFeature",
+                  "SaleType","Alley")
+
+hp_train <- hp_train %>% select(-cols_to_drop)
+```
+
+
+### Checking NA's in numeric columns
+
+```{r echo=FALSE}
+#getting the index of the numeric columns
+numeric_columns <- sapply(hp_train, is.numeric)
+#extracting columns
+numeric_df <- subset(hp_train, select = numeric_columns == TRUE)
+#getting the number of na's by column
+na_columns <- sapply(numeric_df, function(x) sum(is.na(x)))
+#printing columns where there iare na values.
+print(na_columns[na_columns > 0])
+```
+
+The numeric columns with NA's are:
+
+```{r echo=FALSE}
+print(na_columns[na_columns > 0])
+```
+
+
+### Inputing NA's  
+
+There are three variables in our dataset that have NA's. So, let's plot those variables to understand the better way to input those values.
+
+#### Lot Frontage - Distribution
+
+```{r error=FALSE, message=FALSE, warning=FALSE, echo=FALSE}
+hp_train %>%
+  ggplot(aes(x = LotFrontage)) + geom_histogram(fill = '#9494ff', color = 'black') +
+  ggtitle('Lot Frontage - Distribution') + 
+  ylab('number of houses') + xlab('Lot Frontage (square feet)')
+```
+
+- The data is a little bit right skewed, so I'll use the median to fill the NA values.
+
+##### Garage YrBlt
+
+- About the Year, the garage was build, sounds reasonable to compare if there is a correlation between the year the garage was built and the year the home was built. If there is a high correlation, we could use the `YrBuilt` to input values in the `GarageYrBlt`
+
+The correlation between the year the the house was built and the year that the garage was build is:
+
+```{r}
+cor.test(hp_train$YearBuilt, hp_train$GarageYrBlt)
+```
+
+The correlation is pretty high, so a way to input a value that is closer to the actual value is using the variable YrBuilt variable.
+
+##### MasVnArea
+
+```{r error=FALSE, message=FALSE, warning=FALSE, echo=FALSE}
+hp_train %>%
+  subset(MasVnrArea < quantile(MasVnrArea, 0.975, na.rm = TRUE)) %>%
+  ggplot(aes(x = MasVnrArea)) + 
+  geom_histogram(color = 'black', fill = '#9494ff') +
+  xlab('Masonry Veneer Area (sqft)') + 
+  ggtitle('Masonry veneer area - Distribution') + ylab('number of houses')
+```
+
+- In this case, the data is extremely skewed to the right, so I'll use the median (0) again to replace the values
+
+##### Inputing values:
+
+```{r}
+#Here I'll use a data.table way to update the values, basically,
+#if a row has na values, it will be updated to the value after the ':='.
+#DT{row, column := update}
+#LotFrontAge (Median = 69)
+hp_train[is.na(LotFrontage), LotFrontage := 69]
+
+#GarageYrBlt Variable:
+hp_train[is.na(GarageYrBlt), GarageYrBlt := YearBuilt]
+
+
+#MasVnrArea
+hp_train[is.na(MasVnrArea), MasVnrArea := 0]
+
+#new summary of those variables.
+summary(hp_train[, .(LotFrontage, GarageYrBlt, MasVnrArea)]) 
+```
+
+
+- Now, there aren't NA's in our numeric variables.
+
+
+```{r}
+write.csv(hp_train, 'train_update.csv')
+```
+
